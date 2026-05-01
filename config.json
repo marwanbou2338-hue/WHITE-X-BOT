@@ -1,0 +1,31 @@
+{
+  "prefix": "-",
+  "botName": "BOT",
+  "superAdmins": ["61586573840946"],
+  "defaultAdmins": ["61588122232768"],
+  "credentials": {
+    "email": "",
+    "password": ""
+  },
+  "appStatePath": "./appstate.json",
+  "autoRefreshAppState": true,
+  "reconnectOnError": true,
+  "reconnectDelayMs": 10000,
+  "appStateSaveIntervalMs": 300000,
+  "listenEvents": true,
+  "selfListen": false,
+  "autoMarkRead": false,
+  "autoMarkDelivery": false,
+  "online": false,
+  "userAgent": "Mozilla/5.0 (Linux; Android 12; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+  "engine": {
+    "defaultMessage": "....",
+    "defaultIntervalMs": 5000,
+    "minIntervalMs": 1500
+  },
+  "autoReply": {
+    "defaultMessage": "𝗔𝘂𝘁𝗼 𝗥𝗲𝗽𝗹𝘆\n𖤑🪬🧞\u200d♂️🇦🇱𝐊⃟𝐔𖤑 𖥻 𖤑𝐊⃟𝐈 🪬🧞\u200d♂️🇦🇱 𝐙⃝𝐀 𖥱\n𖤑🪬🧞\u200d♂️🇦🇱𝐊⃟𝐔𖤑 𖥻 𖤑𝐊⃟𝐈 🪬🧞\u200d♂️🇦🇱 𝐙⃝𝐀 𖥱\n𖤑🪬🧞\u200d♂️🇦🇱𝐊⃟𝐔𖤑 𖥻 𖤑𝐊⃟𝐈 🪬🧞\u200d♂️🇦🇱 𝐙⃝𝐀 𖥱\n\n𖥻 𝑯𝑬𝑳𝑳▭𝑷𝑶𝑾𝑬𝑹    ♟️\n\n➺ ๛〔 𝑮𝑶𝑨𝑻 𝑶𝑭 𝑭𝑨𝑪𝑬𝑩𝑶𝑶𝑲〕►\n\n➨  𝑷𝑶𝑾𝑬𝑹 𝑳𝑬𝑮𝑬𝑵𝑫 ║𝑳𝑨𝑾 ║ ➬⭊",
+    "defaultIntervalMs": 5000,
+    "minIntervalMs": 1500
+  }
+}
