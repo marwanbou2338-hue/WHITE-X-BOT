@@ -90,6 +90,7 @@ function trackActivity(event) {
 
 function getBotID(api) {
   try {
+    if (api.ctx && api.ctx.userID) return String(api.ctx.userID);
     return String(api.getCurrentUserID());
   } catch (e) {
     return "";
