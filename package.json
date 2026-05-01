@@ -1,0 +1,13 @@
+{
+  "name": "messenger-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Facebook Messenger group bot with appstate login and command system",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "ws3-fca": "^3.5.2"
+  }
+}
