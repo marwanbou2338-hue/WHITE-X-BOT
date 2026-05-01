@@ -1,7 +1,7 @@
 "use strict";
 
 const stateMod = require("../state");
-const { changeNicknameSafe } = require("../fb-helpers");
+const { changeNicknameSafe, changeNicknamesBulk } = require("../fb-helpers");
 
 function ensureAdmin(ctx) {
   if (!stateMod.isAdmin(ctx.senderID)) {
@@ -20,10 +20,6 @@ function getThreadInfo(api, threadID) {
       resolve(info);
     });
   });
-}
-
-function changeNickname(api, nickname, threadID, userID) {
-  return changeNicknameSafe(api, nickname, threadID, userID);
 }
 
 function pickTargetID(ctx) {
@@ -56,8 +52,6 @@ async function setAll(args, ctx) {
     );
     return;
   }
-  const n = stateMod.getNickState(ctx.threadID);
-  n.defaultNickname = text;
 
   let info;
   try {
@@ -72,20 +66,29 @@ async function setAll(args, ctx) {
   }
 
   const participants = (info && info.participantIDs) || [];
-  let ok = 0,
-    fail = 0;
-  for (const uid of participants) {
-    try {
-      await changeNickname(ctx.api, text, ctx.threadID, uid);
+  if (!participants.length) {
+    ctx.api.sendMessage("تعذر جلب قائمة الاعضاء.", ctx.threadID, ctx.event.messageID);
+    return;
+  }
+
+  ctx.api.sendMessage(
+    `⏳ جاري تعيين الكنية لـ ${participants.length} عضو...`,
+    ctx.threadID,
+    ctx.event.messageID
+  );
+
+  const { ok, fail } = await changeNicknamesBulk(ctx.api, text, ctx.threadID, participants);
+
+  if (ok > 0) {
+    const n = stateMod.getNickState(ctx.threadID);
+    n.defaultNickname = text;
+    for (const uid of participants) {
       n.snapshot.set(String(uid), text);
-      ok++;
-    } catch (e) {
-      fail++;
     }
   }
 
   ctx.api.sendMessage(
-    `✓ تم تعيين الكنية للجميع\n• الكنية: ${text}\n• نجح: ${ok}\n• فشل: ${fail}`,
+    `${ok > 0 ? "✓" : "✗"} نتيجة تعيين الكنية\n• الكنية: ${text}\n• نجح: ${ok}\n• فشل: ${fail}`,
     ctx.threadID,
     ctx.event.messageID
   );
@@ -95,7 +98,7 @@ async function setOne(args, ctx) {
   const targetID = pickTargetID(ctx);
   if (!targetID) {
     ctx.api.sendMessage(
-      "حدد العضو عن طريق الرد على رسالته او منشن. مثال (بالرد): كنية فرد <الكنية>",
+      "حدد العضو عن طريق الرد على رسالته او منشن.\nمثال (بالرد): كنية فرد <الكنية>",
       ctx.threadID,
       ctx.event.messageID
     );
@@ -105,26 +108,30 @@ async function setOne(args, ctx) {
   let raw = args.join(" ").trim();
   raw = stripMention(raw, ctx);
   if (!raw) {
-    ctx.api.sendMessage(
-      "اكتب الكنية بعد الامر.",
-      ctx.threadID,
-      ctx.event.messageID
-    );
+    ctx.api.sendMessage("اكتب الكنية بعد الامر.", ctx.threadID, ctx.event.messageID);
     return;
   }
 
+  const n = stateMod.getNickState(ctx.threadID);
+  const prevNick = n.snapshot.get(String(targetID));
+
+  n.snapshot.set(String(targetID), raw);
+
   try {
-    await changeNickname(ctx.api, raw, ctx.threadID, targetID);
-    const n = stateMod.getNickState(ctx.threadID);
-    n.snapshot.set(String(targetID), raw);
+    await changeNicknameSafe(ctx.api, raw, ctx.threadID, targetID);
     ctx.api.sendMessage(
-      `✓ تم تعيين كنية العضو ${targetID}`,
+      `✓ تم تعيين كنية العضو\n• الكنية: ${raw}`,
       ctx.threadID,
       ctx.event.messageID
     );
   } catch (e) {
+    if (prevNick !== undefined) {
+      n.snapshot.set(String(targetID), prevNick);
+    } else {
+      n.snapshot.delete(String(targetID));
+    }
     ctx.api.sendMessage(
-      `فشل تعيين الكنية: ${e.message || "خطأ"}`,
+      `✗ فشل تعيين الكنية: ${e.message || "خطأ"}`,
       ctx.threadID,
       ctx.event.messageID
     );
@@ -146,10 +153,12 @@ async function lockNicks(ctx) {
   }
 
   n.snapshot.clear();
+
   const nicks = (info && info.nicknames) || {};
   for (const [uid, nick] of Object.entries(nicks)) {
     if (nick) n.snapshot.set(String(uid), nick);
   }
+
   if (n.defaultNickname) {
     const participants = (info && info.participantIDs) || [];
     for (const uid of participants) {
@@ -160,11 +169,20 @@ async function lockNicks(ctx) {
   }
 
   n.locked = true;
-  ctx.api.sendMessage(
-    `✓ تم قفل الكنيات\n• تم حفظ ${n.snapshot.size} كنية\n• اي تغيير سيتم ارجاعه تلقائياً`,
-    ctx.threadID,
-    ctx.event.messageID
-  );
+
+  if (n.snapshot.size === 0) {
+    ctx.api.sendMessage(
+      "✓ تم تفعيل القفل\n⚠ لا توجد كنيات محفوظة حالياً\nاستخدم (كنية تعيين) اولاً لتعيين كنيات تحميها",
+      ctx.threadID,
+      ctx.event.messageID
+    );
+  } else {
+    ctx.api.sendMessage(
+      `✓ تم قفل الكنيات\n• محفوظ: ${n.snapshot.size} كنية\n• اي تغيير سيتم ارجاعه تلقائياً`,
+      ctx.threadID,
+      ctx.event.messageID
+    );
+  }
 }
 
 function unlockNicks(ctx) {
@@ -192,19 +210,22 @@ async function clearNicks(ctx) {
   n.defaultNickname = null;
 
   const participants = (info && info.participantIDs) || [];
-  let ok = 0,
-    fail = 0;
-  for (const uid of participants) {
-    try {
-      await changeNickname(ctx.api, "", ctx.threadID, uid);
-      ok++;
-    } catch (e) {
-      fail++;
-    }
+
+  if (!participants.length) {
+    ctx.api.sendMessage("تعذر جلب قائمة الاعضاء.", ctx.threadID, ctx.event.messageID);
+    return;
   }
 
   ctx.api.sendMessage(
-    `✓ تمت ازالة الكنيات\n• نجح: ${ok}\n• فشل: ${fail}`,
+    `⏳ جاري ازالة الكنيات عن ${participants.length} عضو...`,
+    ctx.threadID,
+    ctx.event.messageID
+  );
+
+  const { ok, fail } = await changeNicknamesBulk(ctx.api, "", ctx.threadID, participants);
+
+  ctx.api.sendMessage(
+    `${ok > 0 ? "✓" : "✗"} نتيجة ازالة الكنيات\n• نجح: ${ok}\n• فشل: ${fail}`,
     ctx.threadID,
     ctx.event.messageID
   );
@@ -212,14 +233,14 @@ async function clearNicks(ctx) {
 
 function status(ctx) {
   const n = stateMod.getNickState(ctx.threadID);
-  const msg = [
+  const lines = [
     "╭━〔 حالة الكنيات 〕━╮",
-    `┃ القفل: ${n.locked ? "مفعل" : "معطل"}`,
+    `┃ القفل: ${n.locked ? "🔒 مفعل" : "🔓 معطل"}`,
     `┃ الكنية الافتراضية: ${n.defaultNickname || "—"}`,
     `┃ المحفوظ: ${n.snapshot.size} كنية`,
     "╰━━━━━━━━━━━━━━━╯",
-  ].join("\n");
-  ctx.api.sendMessage(msg, ctx.threadID, ctx.event.messageID);
+  ];
+  ctx.api.sendMessage(lines.join("\n"), ctx.threadID, ctx.event.messageID);
 }
 
 module.exports = {
@@ -228,7 +249,7 @@ module.exports = {
   description: "ادارة كنيات الاعضاء وحمايتها",
   run(args, ctx) {
     if (!ensureAdmin(ctx)) return;
-    const sub = (args[0] || "").toLowerCase();
+    const sub = (args[0] || "").trim();
     const rest = args.slice(1);
 
     switch (sub) {
@@ -261,7 +282,15 @@ module.exports = {
         break;
       default:
         ctx.api.sendMessage(
-          "الاوامر المتوفرة:\n• كنية تعيين <نص> — تعيين للجميع\n• كنية فرد <نص> (بالرد او منشن)\n• كنية قفل — حماية من التغيير\n• كنية فتح — الغاء الحماية\n• كنية ازالة — مسح كل الكنيات\n• كنية حالة",
+          [
+            "〔 اوامر الكنيات 〕",
+            "• كنية تعيين <نص> — تعيين للجميع",
+            "• كنية فرد <نص> — تعيين لفرد (بالرد او منشن)",
+            "• كنية قفل — حماية من التغيير",
+            "• كنية فتح — الغاء الحماية",
+            "• كنية ازالة — مسح كل الكنيات",
+            "• كنية حالة — عرض الحالة",
+          ].join("\n"),
           ctx.threadID,
           ctx.event.messageID
         );
